@@ -3,6 +3,9 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rider Portal | Bites4Life</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
+    
     <style>
         body { font-family: sans-serif; background: #0f172a; color: white; text-align: center; padding: 20px; }
         .box { background: #1e293b; padding: 30px; border-radius: 20px; max-width: 400px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
@@ -20,17 +23,15 @@
     
     <div class="box">
         <h2 style="margin-top:0">Rider Portal</h2>
-
         <div id="setup-section">
             <p>Enter code to activate app</p>
             <input type="text" id="rider-code" placeholder="ENTER CODE">
             <button class="btn here" onclick="registerDevice()">ACTIVATE</button>
         </div>
-
         <div id="action-section" class="hidden">
             <button class="btn coming" onclick="s('Coming')">COMING</button>
             <button class="btn here" onclick="s('Here')">HERE</button>
-            <p id="m" style="color:#ef4444"></p>
+            <p id="m" style="color:#f59e0b"></p>
         </div>
     </div>
 
@@ -59,12 +60,18 @@
         }
 
         async function s(st) {
+            document.getElementById('m').innerText = "Updating...";
             const res = await fetch(`${API}/update_status`, {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({code: localStorage.getItem('rider_code'), status:st})
             });
-            const d = await res.json();
-            if(res.ok) alert("Status Updated!"); else document.getElementById('m').innerText = d.error;
+            if(res.ok) {
+                document.getElementById('m').innerText = "Status Updated!";
+                document.getElementById('m').style.color = "#10b981";
+            } else {
+                document.getElementById('m').innerText = "Error! Try Again";
+                document.getElementById('m').style.color = "#ef4444";
+            }
         }
 
         setInterval(() => {
@@ -72,5 +79,4 @@
         }, 2000);
     </script>
 </body>
-
 </html>
