@@ -30,12 +30,12 @@
 <body>
 
 <div id="loginScreen" class="login-screen">
-    <div style="background:white; padding:40px; border-radius:20px; width:340px; text-align:center;">
+    <form onsubmit="login(event)" style="background:white; padding:40px; border-radius:20px; width:340px; text-align:center;">
         <h2 style="margin-bottom:30px">Portal Login</h2>
-        <input type="text" id="email" placeholder="Email" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd;">
-        <input type="password" id="pass" placeholder="Password" style="width:100%; padding:12px; margin-bottom:25px; border-radius:8px; border:1px solid #ddd;">
-        <button class="btn btn-p" onclick="login()" style="width:100%; padding:14px">Login</button>
-    </div>
+        <input type="text" id="email" name="username" autocomplete="username" placeholder="Email" required style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd;">
+        <input type="password" id="pass" name="password" autocomplete="current-password" placeholder="Password" required style="width:100%; padding:12px; margin-bottom:25px; border-radius:8px; border:1px solid #ddd;">
+        <button type="submit" class="btn btn-p" style="width:100%; padding:14px">Login</button>
+    </form>
 </div>
 
 <div class="sidebar">
@@ -93,18 +93,18 @@
     const API = "https://free-martie-hashirpl31-30682c6c.koyeb.app";
     let user = null;
 
-    // --- SLEEP PREVENTION LOGIC (ADMIN SIDE) ---
     function keepBackendAlive() {
         console.log("Ping sent to backend to prevent sleep...");
         fetch(`${API}/`)
             .then(() => console.log("Backend is awake and responding!"))
             .catch(err => console.error("Ping failed:", err));
     }
-    // Har 4 minute baad ping karega taake Koyeb ki 15-20 min limit hit na ho
     setInterval(keepBackendAlive, 240000); 
-    // --- END SLEEP PREVENTION ---
 
-    async function login() {
+    async function login(event) {
+        // Form submission prevent karna zaroori hai refresh rokne ke liye
+        if(event) event.preventDefault();
+
         const email = document.getElementById('email').value;
         const password = document.getElementById('pass').value;
         
@@ -125,8 +125,6 @@
             }
             loadRiders(); 
             setInterval(loadRiders, 5000);
-            
-            // Login hote hi pehla ping bhej dein
             keepBackendAlive();
         } else {
             alert("Login Failed: Check Credentials");
