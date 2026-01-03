@@ -6,18 +6,17 @@ import random
 import os
 
 app = Flask(__name__)
-# Sab origins allow kar dein taake Netlify se connection mein masla na ho
+# CORS ko configuration ke sath set kiya hai taake requests block na hon
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Database configuration
+# Database configuration - Koyeb/Vercel ke liye /tmp folder zaroori hai
 basedir = os.path.abspath(os.path.dirname(__file__))
-# Koyeb ya Vercel ke liye /tmp folder behtar hai
 db_path = os.path.join('/tmp', 'rider_system_final.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Models
+# --- Models ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True)
@@ -35,19 +34,27 @@ class Rider(db.Model):
     a_time = db.Column(db.String(50), default="--") # Admin's route time
     last_click_dt = db.Column(db.DateTime, default=datetime.utcnow() - timedelta(minutes=10))
 
-# Database initialization
+# --- Database Initialization ---
 def init_db():
     with app.app_context():
         db.create_all()
+        # SuperAdmin credentials update kiye gaye hain
         if not User.query.filter_by(role='superadmin').first():
             db.session.add(User(email="super", password="4343", role="superadmin"))
             db.session.commit()
 
 init_db()
 
+# --- Routes ---
+
 @app.route('/')
 def home():
-    return jsonify({"status": "Online", "message": "Bites4Life API is Running!"})
+    # Ye route Admin panel ke "Ping" ko handle karega taake server na soye
+    return jsonify({
+        "status": "Online", 
+        "message": "Bites4Life API is Running!",
+        "server_time": datetime.now().strftime("%I:%M:%S %p")
+    })
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -125,7 +132,7 @@ def update_status():
     if not r: 
         return jsonify({"error": "Invalid Code"}), 404
     
-    # Status update logic
+    # Device registration on first click
     if r.device_info == "Not Registered":
         r.device_info = request.headers.get('User-Agent', 'Mobile Device')
     
@@ -144,5 +151,5 @@ def delete_rider(code):
     return jsonify({"success": True})
 
 if __name__ == '__main__':
+    # Debug mode local testing ke liye hai, Koyeb par ye production server use karega
     app.run(debug=True)
-
