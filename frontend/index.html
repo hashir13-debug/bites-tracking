@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoring Hub | Control Panel</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #3b82f6; --secondary: #1e293b; --danger: #ef4444; --bg: #f8fafc; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; display: flex; }
+        .sidebar { width: 260px; background: var(--secondary); color: white; height: 100vh; position: fixed; padding: 25px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+        .main { margin-left: 260px; width: calc(100% - 260px); padding: 30px; }
+        .card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        .hidden { display: none !important; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 15px; background: #f1f5f9; color: #64748b; font-size: 12px; border-radius: 8px 8px 0 0; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .branding { font-size: 11px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; border-top: 1px solid #334155; padding-top: 15px; }
+        .status-badge { padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 11px; }
+        .Coming { background: #fef3c7; color: #92400e; }
+        .OnRoute { background: #dbeafe; color: #1e40af; }
+        .Here { background: #dcfce7; color: #166534; }
+        .btn { border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s; }
+        .btn-p { background: var(--primary); color: white; }
+        .login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 10000; }
+    </style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen">
+    <div style="background:white; padding:40px; border-radius:20px; width:340px; text-align:center;">
+        <h2 style="margin-bottom:30px">Portal Login</h2>
+        <input type="text" id="email" placeholder="Email" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd;">
+        <input type="password" id="pass" placeholder="Password" style="width:100%; padding:12px; margin-bottom:25px; border-radius:8px; border:1px solid #ddd;">
+        <button class="btn btn-p" onclick="login()" style="width:100%; padding:14px">Login</button>
+    </div>
+</div>
+
+<div class="sidebar">
+    <div>
+        <h2 style="color:var(--primary); margin-bottom:40px"><i class="fas fa-microchip"></i> R-Track</h2>
+        <div style="padding:15px 0; color:#cbd5e1"><i class="fas fa-users"></i> Riders Management</div>
+        <div id="adminTab" class="hidden" style="padding:15px 0; color:#cbd5e1"><i class="fas fa-user-shield"></i> Admins Management</div>
+    </div>
+    <div class="branding">
+        Designed by <br> <b style="color:#f8fafc">HASHIR JUNAID</b>
+    </div>
+</div>
+
+<div class="main">
+    <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:40px">
+        <h1 id="welcome" style="margin:0; font-size:24px">Dashboard</h1>
+        <button onclick="location.reload()" style="background:none; border:none; color:var(--danger); cursor:pointer"><i class="fas fa-power-off"></i> Logout</button>
+    </header>
+
+    <div id="superBox" class="card hidden">
+        <h3><i class="fas fa-plus"></i> Add New Administrator</h3>
+        <input type="text" id="newAdminEmail" placeholder="Admin Email">
+        <input type="text" id="newAdminPass" placeholder="Password">
+        <button class="btn btn-p" onclick="addAdmin()">Create</button>
+        <table>
+            <thead><tr><th>Email</th><th>Login Device</th><th>Action</th></tr></thead>
+            <tbody id="adminTable"></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-list"></i> Real-time Rider Tracking</h3>
+        <div style="margin-bottom:25px">
+            <input type="text" id="rName" placeholder="Rider Name">
+            <button class="btn btn-p" onclick="addRider()">Add Rider</button>
+            <span id="codeDisplay" style="margin-left:20px; font-weight:bold; color:var(--primary)"></span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rider & Device</th>
+                    <th>Status</th>
+                    <th>Coming Time</th>
+                    <th>Route Time</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="riderTable"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const API = "http://127.0.0.1:5000";
+    let user = null;
+
+    async function login() {
+        const res = await fetch(`${API}/login`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({email:document.getElementById('email').value, password:document.getElementById('pass').value})
+        });
+        if(res.ok) {
+            user = await res.json();
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('welcome').innerText = "User: " + user.email;
+            if(user.role === 'superadmin') {
+                document.getElementById('superBox').classList.remove('hidden');
+                document.getElementById('adminTab').classList.remove('hidden');
+                loadAdmins();
+            }
+            loadRiders(); setInterval(loadRiders, 5000);
+        } else alert("Login Fail");
+    }
+
+    async function loadRiders() {
+        const res = await fetch(`${API}/get_riders`);
+        const data = await res.json();
+        document.getElementById('riderTable').innerHTML = data.map(r => `
+            <tr>
+                <td><b>${r.name}</b> (${r.code})<br><small style="color:#94a3b8">${r.device}</small></td>
+                <td><span class="status-badge ${r.status}">${r.status}</span></td>
+                <td style="color:#f59e0b; font-weight:600">${r.r_time}</td>
+                <td style="color:var(--primary); font-weight:600">${r.a_time}</td>
+                <td>
+                    <button class="btn btn-p" style="padding:5px 10px; font-size:12px" onclick="setRoute('${r.code}')">Route</button>
+                    ${user.role === 'superadmin' ? `<button onclick="delRider('${r.code}')" style="margin-left:10px; border:none; background:none; color:var(--danger); cursor:pointer"><i class="fas fa-trash"></i></button>` : ''}
+                </td>
+            </tr>`).join('');
+    }
+
+    async function addRider() {
+        const res = await fetch(`${API}/add_rider`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:document.getElementById('rName').value})});
+        const d = await res.json(); document.getElementById('codeDisplay').innerText = "CODE: " + d.code; loadRiders();
+    }
+
+    async function setRoute(c) { await fetch(`${API}/admin/on_route`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code:c})}); loadRiders(); }
+    async function delRider(c) { if(confirm('Del?')) { await fetch(`${API}/delete_rider/${c}`, {method:'DELETE'}); loadRiders(); } }
+
+    async function loadAdmins() {
+        const res = await fetch(`${API}/get_admins`);
+        const data = await res.json();
+        document.getElementById('adminTable').innerHTML = data.map(a => `
+            <tr><td>${a.email}</td><td style="font-size:11px; color:#94a3b8">${a.device}</td><td><button onclick="delAdmin(${a.id})" style="border:none; color:var(--danger); background:none; cursor:pointer"><i class="fas fa-user-minus"></i></button></td></tr>`).join('');
+    }
+
+    async function addAdmin() {
+        await fetch(`${API}/add_admin`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:document.getElementById('newAdminEmail').value, password:document.getElementById('newAdminPass').value})});
+        loadAdmins();
+    }
+
+    async function delAdmin(id) { await fetch(`${API}/delete_admin/${id}`, {method:'DELETE'}); loadAdmins(); }
+</script>
+</body>
+</html>
