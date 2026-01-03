@@ -40,7 +40,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         if not User.query.filter_by(role='superadmin').first():
-            db.session.add(User(email="super@test.com", password="123", role="superadmin"))
+            db.session.add(User(email="super", password="4343", role="superadmin"))
             db.session.commit()
 
 init_db()
@@ -145,3 +145,4 @@ def delete_rider(code):
 
 if __name__ == '__main__':
     app.run(debug=True)
+
