@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rider Portal | Bites4Life</title>
+    <style>
+        body { font-family: sans-serif; background: #0f172a; color: white; text-align: center; padding: 20px; }
+        .box { background: #1e293b; padding: 30px; border-radius: 20px; max-width: 400px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        input { width: 100%; padding: 15px; margin-bottom: 20px; border-radius: 10px; border: none; font-size: 18px; text-align: center; box-sizing: border-box; }
+        .btn { width: 100%; padding: 25px; margin: 10px 0; border: none; border-radius: 12px; font-size: 20px; font-weight: bold; cursor: pointer; }
+        .coming { background: #f59e0b; color: #000; }
+        .here { background: #10b981; color: #fff; }
+        .hidden { display: none; }
+        #net-error { background: #ef4444; padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; }
+        .branding { margin-top: 40px; font-size: 10px; color: #475569; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div id="net-error">⚠️ No Internet Connection!</div>
+    
+    <div class="box">
+        <h2 style="margin-top:0">Rider Portal</h2>
+
+        <div id="setup-section">
+            <p>Enter code to activate app</p>
+            <input type="text" id="rider-code" placeholder="ENTER CODE">
+            <button class="btn here" onclick="registerDevice()">ACTIVATE</button>
+        </div>
+
+        <div id="action-section" class="hidden">
+            <button class="btn coming" onclick="s('Coming')">COMING</button>
+            <button class="btn here" onclick="s('Here')">HERE</button>
+            <p id="m" style="color:#ef4444"></p>
+        </div>
+    </div>
+
+    <div class="branding">Powered by <br> <b>HASHIR JUNAID</b></div>
+
+    <script>
+        const API = "http://127.0.0.1:5000";
+
+        window.onload = function() {
+            if(localStorage.getItem('rider_code')) showActions();
+        };
+
+        async function registerDevice() {
+            const code = document.getElementById('rider-code').value;
+            const res = await fetch(`${API}/check_code/${code}`);
+            const data = await res.json();
+            if(data.success) {
+                localStorage.setItem('rider_code', code);
+                showActions();
+            } else alert("Invalid Code!");
+        }
+
+        function showActions() {
+            document.getElementById('setup-section').classList.add('hidden');
+            document.getElementById('action-section').classList.remove('hidden');
+        }
+
+        async function s(st) {
+            const res = await fetch(`${API}/update_status`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({code: localStorage.getItem('rider_code'), status:st})
+            });
+            const d = await res.json();
+            if(res.ok) alert("Status Updated!"); else document.getElementById('m').innerText = d.error;
+        }
+
+        setInterval(() => {
+            document.getElementById('net-error').style.display = navigator.onLine ? 'none' : 'block';
+        }, 2000);
+    </script>
+</body>
+</html>
