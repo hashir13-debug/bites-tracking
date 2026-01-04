@@ -6,10 +6,9 @@ import random
 import os
 
 app = Flask(__name__)
-# CORS ko configuration ke sath set kiya hai taake requests block na hon
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Database configuration - Koyeb/Vercel ke liye /tmp folder zaroori hai
+# Database configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join('/tmp', 'rider_system_final.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
@@ -30,15 +29,16 @@ class Rider(db.Model):
     code = db.Column(db.String(10), unique=True)
     status = db.Column(db.String(50), default="Available")
     device_info = db.Column(db.String(255), default="Not Registered")
-    r_time = db.Column(db.String(50), default="--") # Rider's click time
-    a_time = db.Column(db.String(50), default="--") # Admin's route time
-    last_click_dt = db.Column(db.DateTime, default=datetime.utcnow() - timedelta(minutes=10))
+    r_time = db.Column(db.String(50), default="--") 
+    a_time = db.Column(db.String(50), default="--") 
+    last_click_dt = db.Column(db.DateTime, default=datetime.utcnow())
+    # Ringing Features
+    ring_status = db.Column(db.String(20), default="idle") # idle, ringing
 
 # --- Database Initialization ---
 def init_db():
     with app.app_context():
         db.create_all()
-        # SuperAdmin credentials update kiye gaye hain
         if not User.query.filter_by(role='superadmin').first():
             db.session.add(User(email="super", password="4343", role="superadmin"))
             db.session.commit()
@@ -49,12 +49,31 @@ init_db()
 
 @app.route('/')
 def home():
-    # Ye route Admin panel ke "Ping" ko handle karega taake server na soye
-    return jsonify({
-        "status": "Online", 
-        "message": "Bites4Life API is Running!",
-        "server_time": datetime.now().strftime("%I:%M:%S %p")
-    })
+    return jsonify({"status": "Online", "message": "Bites4Life API is Running!"})
+
+# --- Calling Routes ---
+
+@app.route('/admin/ring_rider', methods=['POST'])
+def ring_rider():
+    data = request.json
+    r = Rider.query.filter_by(code=data['code']).first()
+    if r:
+        r.ring_status = "ringing"
+        db.session.commit()
+        return jsonify({"success": True})
+    return jsonify({"error": "Rider not found"}), 404
+
+@app.route('/admin/stop_ring', methods=['POST'])
+def stop_ring():
+    data = request.json
+    r = Rider.query.filter_by(code=data['code']).first()
+    if r:
+        r.ring_status = "idle"
+        db.session.commit()
+        return jsonify({"success": True})
+    return jsonify({"error": "Rider not found"}), 404
+
+# --- Standard Routes ---
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -66,35 +85,6 @@ def login():
         return jsonify({"role": u.role, "email": u.email, "success": True})
     return jsonify({"error": "Invalid Credentials"}), 401
 
-@app.route('/check_code/<code>', methods=['GET'])
-def check_code(code):
-    r = Rider.query.filter_by(code=code).first()
-    if r: 
-        return jsonify({"success": True, "name": r.name})
-    return jsonify({"success": False}), 404
-
-@app.route('/get_admins', methods=['GET'])
-def get_admins():
-    admins = User.query.filter_by(role='admin').all()
-    return jsonify([{"id": a.id, "email": a.email, "device": a.last_device} for a in admins])
-
-@app.route('/add_admin', methods=['POST'])
-def add_admin():
-    data = request.json
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({"error": "Admin already exists"}), 400
-    db.session.add(User(email=data['email'], password=data['password'], role='admin'))
-    db.session.commit()
-    return jsonify({"success": True})
-
-@app.route('/delete_admin/<int:id>', methods=['DELETE'])
-def delete_admin(id):
-    u = User.query.get(id)
-    if u:
-        db.session.delete(u)
-        db.session.commit()
-    return jsonify({"success": True})
-
 @app.route('/get_riders', methods=['GET'])
 def get_riders():
     riders = Rider.query.all()
@@ -104,15 +94,24 @@ def get_riders():
         "status": r.status, 
         "r_time": r.r_time, 
         "a_time": r.a_time, 
-        "device": r.device_info
+        "device": r.device_info,
+        "ring_status": r.ring_status
     } for r in riders])
 
-@app.route('/add_rider', methods=['POST'])
-def add_rider():
-    code = str(random.randint(1000, 9999))
-    db.session.add(Rider(name=request.json['name'], code=code))
+@app.route('/update_status', methods=['POST'])
+def update_status():
+    data = request.json
+    r = Rider.query.filter_by(code=data['code']).first()
+    if not r: return jsonify({"error": "Invalid Code"}), 404
+    
+    r.status = data['status']
+    r.r_time = datetime.now().strftime("%I:%M %p")
+    
+    # Agar status update ho jaye to ring khud hi idle ho jani chahiye
+    r.ring_status = "idle"
+    
     db.session.commit()
-    return jsonify({"code": code, "success": True})
+    return jsonify({"success": True})
 
 @app.route('/admin/on_route', methods=['POST'])
 def set_on_route():
@@ -121,26 +120,23 @@ def set_on_route():
     if r:
         r.status = "On Route"
         r.a_time = datetime.now().strftime("%I:%M %p")
+        r.ring_status = "idle"
         db.session.commit()
         return jsonify({"success": True})
     return jsonify({"error": "Rider not found"}), 404
 
-@app.route('/update_status', methods=['POST'])
-def update_status():
-    data = request.json
-    r = Rider.query.filter_by(code=data['code']).first()
-    if not r: 
-        return jsonify({"error": "Invalid Code"}), 404
-    
-    # Device registration on first click
-    if r.device_info == "Not Registered":
-        r.device_info = request.headers.get('User-Agent', 'Mobile Device')
-    
-    r.status = data['status']
-    r.r_time = datetime.now().strftime("%I:%M %p")
-    r.last_click_dt = datetime.utcnow()
+@app.route('/check_code/<code>', methods=['GET'])
+def check_code(code):
+    r = Rider.query.filter_by(code=code).first()
+    if r: return jsonify({"success": True, "name": r.name})
+    return jsonify({"success": False}), 404
+
+@app.route('/add_rider', methods=['POST'])
+def add_rider():
+    code = str(random.randint(1000, 9999))
+    db.session.add(Rider(name=request.json['name'], code=code))
     db.session.commit()
-    return jsonify({"success": True})
+    return jsonify({"code": code, "success": True})
 
 @app.route('/delete_rider/<code>', methods=['DELETE'])
 def delete_rider(code):
@@ -151,5 +147,4 @@ def delete_rider(code):
     return jsonify({"success": True})
 
 if __name__ == '__main__':
-    # Debug mode local testing ke liye hai, Koyeb par ye production server use karega
     app.run(debug=True)
