@@ -5,7 +5,6 @@
     <title>Monitoring Hub | Control Panel</title>
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="favicon.png">
-    
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root { --primary: #3b82f6; --secondary: #1e293b; --danger: #ef4444; --bg: #f8fafc; }
@@ -25,7 +24,10 @@
         .Here { background: #dcfce7; color: #166534; }
         .btn { border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s; }
         .btn-p { background: var(--primary); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-active-view { background: #10b981; color: white; }
         .login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 10000; }
+        input { padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-right: 10px; }
     </style>
 </head>
 <body>
@@ -55,8 +57,8 @@
     </header>
 
     <div id="superBox" class="card hidden">
-        <h3><i class="fas fa-plus"></i> Add New Administrator</h3>
-        <input type="text" id="newAdminEmail" placeholder="Admin Email">
+        <h3><i class="fas fa-plus"></i> Add Administrator</h3>
+        <input type="text" id="newAdminEmail" placeholder="Email">
         <input type="text" id="newAdminPass" placeholder="Password">
         <button class="btn btn-p" onclick="addAdmin()">Create</button>
         <br><br>
@@ -67,18 +69,25 @@
     </div>
 
     <div class="card">
-        <h3><i class="fas fa-list"></i> Real-time Rider Tracking</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+            <h3><i class="fas fa-list"></i> Tracking List</h3>
+            <button id="viewBtn" class="btn btn-outline" onclick="toggleView()">
+                <i class="fas fa-eye"></i> Show All Riders
+            </button>
+        </div>
+
         <div style="margin-bottom:25px">
             <input type="text" id="rName" placeholder="Rider Name">
             <button class="btn btn-p" onclick="addRider()">Add Rider</button>
             <span id="codeDisplay" style="margin-left:20px; font-weight:bold; color:var(--primary)"></span>
         </div>
+
         <table>
             <thead>
                 <tr>
                     <th>Rider & Device</th>
                     <th>Status</th>
-                    <th>Coming Time</th>
+                    <th>Coming/Here Time</th>
                     <th>Route Time</th>
                     <th>Actions</th>
                 </tr>
@@ -91,11 +100,26 @@
 <script>
     const API = "https://free-martie-hashirpl31-30682c6c.koyeb.app";
     let user = null;
+    let showFullList = false; // Variable to control the filter
 
     function keepBackendAlive() {
         fetch(`${API}/`).catch(e => console.error(e));
     }
     setInterval(keepBackendAlive, 240000); 
+
+    // Function to switch between 'Active Only' and 'Show All'
+    function toggleView() {
+        showFullList = !showFullList;
+        const btn = document.getElementById('viewBtn');
+        if(showFullList) {
+            btn.innerHTML = '<i class="fas fa-filter"></i> Show Active Only';
+            btn.classList.add('btn-active-view');
+        } else {
+            btn.innerHTML = '<i class="fas fa-eye"></i> Show All Riders';
+            btn.classList.remove('btn-active-view');
+        }
+        loadRiders();
+    }
 
     async function login(event) {
         if(event) event.preventDefault();
@@ -115,7 +139,8 @@
                 document.getElementById('adminTab').classList.remove('hidden');
                 loadAdmins();
             }
-            loadRiders(); setInterval(loadRiders, 5000);
+            loadRiders(); 
+            setInterval(loadRiders, 5000);
             keepBackendAlive();
         } else alert("Login Failed");
     }
@@ -123,12 +148,33 @@
     async function loadRiders() {
         try {
             const res = await fetch(`${API}/get_riders`);
-            const data = await res.json();
+            let data = await res.json();
+            
+            // Filtering Logic
+            if(!showFullList) {
+                // Sirf wo riders dikhao jo "Coming" ya "Here" hain
+                data = data.filter(r => r.status === 'Coming' || r.status === 'Here');
+            }
+
             document.getElementById('riderTable').innerHTML = data.map(r => {
                 const statusClass = r.status.replace(" ", "-");
-                return `<tr><td><b>${r.name}</b> (${r.code})<br><small style="color:#94a3b8">${r.device || 'Not Active'}</small></td><td><span class="status-badge ${statusClass}">${r.status}</span></td><td style="color:#f59e0b; font-weight:600">${r.r_time}</td><td style="color:var(--primary); font-weight:600">${r.a_time}</td><td><button class="btn btn-p" style="padding:5px 10px; font-size:12px" onclick="setRoute('${r.code}')">Route</button>${user.role === 'superadmin' ? `<button onclick="delRider('${r.code}')" style="margin-left:10px; border:none; background:none; color:var(--danger); cursor:pointer"><i class="fas fa-trash"></i></button>` : ''}</td></tr>`;
+                return `<tr>
+                    <td><b>${r.name}</b> (${r.code})<br><small style="color:#94a3b8">${r.device || 'Not Active'}</small></td>
+                    <td><span class="status-badge ${statusClass}">${r.status}</span></td>
+                    <td style="color:#f59e0b; font-weight:600">${r.r_time}</td>
+                    <td style="color:var(--primary); font-weight:600">${r.a_time}</td>
+                    <td>
+                        <button class="btn btn-p" style="padding:5px 10px; font-size:12px" onclick="setRoute('${r.code}')">Route</button>
+                        ${user.role === 'superadmin' ? `<button onclick="delRider('${r.code}')" style="margin-left:10px; border:none; background:none; color:var(--danger); cursor:pointer"><i class="fas fa-trash"></i></button>` : ''}
+                    </td>
+                </tr>`;
             }).join('');
         } catch (e) {}
+    }
+
+    async function setRoute(c) { 
+        await fetch(`${API}/admin/on_route`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code:c})}); 
+        loadRiders(); // Button click hote hi list refresh hogi aur rider gayab ho jaye ga
     }
 
     async function addRider() {
@@ -138,17 +184,19 @@
         const d = await res.json(); document.getElementById('codeDisplay').innerText = "CODE: " + d.code; loadRiders();
     }
 
-    async function setRoute(c) { await fetch(`${API}/admin/on_route`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code:c})}); loadRiders(); }
     async function delRider(c) { if(confirm('Delete?')) { await fetch(`${API}/delete_rider/${c}`, {method:'DELETE'}); loadRiders(); } }
+    
     async function loadAdmins() {
         const res = await fetch(`${API}/get_admins`);
         const data = await res.json();
         document.getElementById('adminTable').innerHTML = data.map(a => `<tr><td>${a.email}</td><td style="font-size:11px; color:#94a3b8">${a.device}</td><td><button onclick="delAdmin(${a.id})" style="border:none; color:var(--danger); background:none; cursor:pointer"><i class="fas fa-user-minus"></i></button></td></tr>`).join('');
     }
+
     async function addAdmin() {
         await fetch(`${API}/add_admin`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:document.getElementById('newAdminEmail').value, password:document.getElementById('newAdminPass').value})});
         loadAdmins();
     }
+    
     async function delAdmin(id) { if(confirm('Del?')) { await fetch(`${API}/delete_admin/${id}`, {method:'DELETE'}); loadAdmins(); } }
 </script>
 </body>
