@@ -59,6 +59,18 @@
         <button onclick="location.reload()" style="background:none; border:none; color:var(--danger); cursor:pointer"><i class="fas fa-power-off"></i> Logout</button>
     </header>
 
+    <div id="superBox" class="card hidden">
+        <h3><i class="fas fa-plus"></i> Add Administrator</h3>
+        <input type="text" id="newAdminEmail" placeholder="Email">
+        <input type="text" id="newAdminPass" placeholder="Password">
+        <button class="btn btn-p" onclick="addAdmin()">Create</button>
+        <br><br>
+        <table>
+            <thead><tr><th>Email</th><th>Login Device</th><th>Action</th></tr></thead>
+            <tbody id="adminTable"></tbody>
+        </table>
+    </div>
+
     <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
             <h3><i class="fas fa-list"></i> Real-time Rider Tracking</h3>
@@ -140,6 +152,11 @@
         window.history.pushState({}, '', window.location.href);
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('welcome').innerText = "User: " + user.email;
+        if(user.role === 'superadmin') {
+            document.getElementById('superBox').classList.remove('hidden');
+            document.getElementById('adminTab').classList.remove('hidden');
+            loadAdmins();
+        }
         loadRiders(); 
         setInterval(loadRiders, 5000);
         keepBackendAlive();
@@ -151,7 +168,6 @@
             let data = await res.json();
             
             if(!showFullList) {
-                // Sirf Active riders dikhao (Jin ka status On-Route nahi hai)
                 data = data.filter(r => r.status !== 'On Route' && r.status !== 'Available');
             }
 
@@ -169,6 +185,7 @@
                             <i class="fas fa-phone"></i> Call
                         </button>
                         <button class="btn btn-p" style="padding:5px 10px; font-size:12px" onclick="setRoute('${r.code}')">Route</button>
+                        ${user.role === 'superadmin' ? `<button onclick="delRider('${r.code}')" style="margin-left:10px; border:none; background:none; color:var(--danger); cursor:pointer"><i class="fas fa-trash"></i></button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -196,6 +213,21 @@
         document.getElementById('codeDisplay').innerText = "CODE: " + d.code; 
         loadRiders();
     }
+
+    async function delRider(c) { if(confirm('Delete Rider?')) { await fetch(`${API}/delete_rider/${c}`, {method:'DELETE'}); loadRiders(); } }
+    
+    async function loadAdmins() {
+        const res = await fetch(`${API}/get_admins`);
+        const data = await res.json();
+        document.getElementById('adminTable').innerHTML = data.map(a => `<tr><td>${a.email}</td><td style="font-size:11px; color:#94a3b8">${a.device}</td><td><button onclick="delAdmin(${a.id})" style="border:none; color:var(--danger); background:none; cursor:pointer"><i class="fas fa-user-minus"></i></button></td></tr>`).join('');
+    }
+
+    async function addAdmin() {
+        await fetch(`${API}/add_admin`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:document.getElementById('newAdminEmail').value, password:document.getElementById('newAdminPass').value})});
+        loadAdmins();
+    }
+    
+    async function delAdmin(id) { if(confirm('Delete Admin?')) { await fetch(`${API._delete_admin}/${id}`, {method:'DELETE'}); loadAdmins(); } }
 </script>
 </body>
 </html>
