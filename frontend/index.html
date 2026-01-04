@@ -17,11 +17,16 @@
         th { text-align: left; padding: 15px; background: #f1f5f9; color: #64748b; font-size: 12px; border-radius: 8px 8px 0 0; }
         td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
         .status-badge { padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 11px; display: inline-block; }
+        
+        /* Status Colors */
         .Coming { background: #fef3c7; color: #92400e; }
         .On-Route { background: #dbeafe; color: #1e40af; }
         .Here { background: #dcfce7; color: #166534; }
+        .No-Response { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
         .btn { border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s; }
         .btn-p { background: var(--primary); color: white; }
+        .btn-call { background: #f59e0b; color: white; margin-right: 5px; }
         .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
         .btn-active-view { background: #10b981; color: white; }
         .login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 10000; }
@@ -53,18 +58,6 @@
         <h1 id="welcome" style="margin:0; font-size:24px">Dashboard</h1>
         <button onclick="location.reload()" style="background:none; border:none; color:var(--danger); cursor:pointer"><i class="fas fa-power-off"></i> Logout</button>
     </header>
-
-    <div id="superBox" class="card hidden">
-        <h3><i class="fas fa-plus"></i> Add Administrator</h3>
-        <input type="text" id="newAdminEmail" placeholder="Email">
-        <input type="text" id="newAdminPass" placeholder="Password">
-        <button class="btn btn-p" onclick="addAdmin()">Create</button>
-        <br><br>
-        <table>
-            <thead><tr><th>Email</th><th>Login Device</th><th>Action</th></tr></thead>
-            <tbody id="adminTable"></tbody>
-        </table>
-    </div>
 
     <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
@@ -128,19 +121,17 @@
                 user = await res.json();
                 setupDashboard();
             } else if (email === "super" && password === "4343") {
-                // Bypass for SuperAdmin if API has slight delay
                 user = {email: "super", role: "superadmin"};
                 setupDashboard();
             } else {
                 alert("Login Failed: Invalid Credentials");
             }
         } catch (err) {
-            // Check for hardcoded superadmin if network is slow
             if (email === "super" && password === "4343") {
                 user = {email: "super", role: "superadmin"};
                 setupDashboard();
             } else {
-                alert("Server not responding. Please wait 30 seconds and try again.");
+                alert("Server not responding. Please try again.");
             }
         }
     }
@@ -149,11 +140,6 @@
         window.history.pushState({}, '', window.location.href);
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('welcome').innerText = "User: " + user.email;
-        if(user.role === 'superadmin') {
-            document.getElementById('superBox').classList.remove('hidden');
-            document.getElementById('adminTab').classList.remove('hidden');
-            loadAdmins();
-        }
         loadRiders(); 
         setInterval(loadRiders, 5000);
         keepBackendAlive();
@@ -165,23 +151,36 @@
             let data = await res.json();
             
             if(!showFullList) {
-                data = data.filter(r => r.status === 'Coming' || r.status === 'Here');
+                // Sirf Active riders dikhao (Jin ka status On-Route nahi hai)
+                data = data.filter(r => r.status !== 'On Route' && r.status !== 'Available');
             }
 
             document.getElementById('riderTable').innerHTML = data.map(r => {
                 const statusClass = r.status.replace(" ", "-");
+                const noResponseClass = r.status === 'No Response' ? 'No-Response' : statusClass;
+                
                 return `<tr>
                     <td><b>${r.name}</b> (${r.code})<br><small style="color:#94a3b8">${r.device || 'Not Active'}</small></td>
-                    <td><span class="status-badge ${statusClass}">${r.status}</span></td>
+                    <td><span class="status-badge ${noResponseClass}">${r.status}</span></td>
                     <td style="color:#f59e0b; font-weight:600">${r.r_time}</td>
                     <td style="color:var(--primary); font-weight:600">${r.a_time}</td>
                     <td>
+                        <button class="btn btn-call" style="padding:5px 10px; font-size:12px" onclick="callRider('${r.code}')">
+                            <i class="fas fa-phone"></i> Call
+                        </button>
                         <button class="btn btn-p" style="padding:5px 10px; font-size:12px" onclick="setRoute('${r.code}')">Route</button>
-                        ${user.role === 'superadmin' ? `<button onclick="delRider('${r.code}')" style="margin-left:10px; border:none; background:none; color:var(--danger); cursor:pointer"><i class="fas fa-trash"></i></button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
         } catch (e) {}
+    }
+
+    async function callRider(c) {
+        await fetch(`${API}/admin/ring_rider`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({code: c})
+        });
+        alert("Calling Rider Terminal...");
     }
 
     async function setRoute(c) { 
@@ -197,21 +196,6 @@
         document.getElementById('codeDisplay').innerText = "CODE: " + d.code; 
         loadRiders();
     }
-
-    async function delRider(c) { if(confirm('Delete Rider?')) { await fetch(`${API}/delete_rider/${c}`, {method:'DELETE'}); loadRiders(); } }
-    
-    async function loadAdmins() {
-        const res = await fetch(`${API}/get_admins`);
-        const data = await res.json();
-        document.getElementById('adminTable').innerHTML = data.map(a => `<tr><td>${a.email}</td><td style="font-size:11px; color:#94a3b8">${a.device}</td><td><button onclick="delAdmin(${a.id})" style="border:none; color:var(--danger); background:none; cursor:pointer"><i class="fas fa-user-minus"></i></button></td></tr>`).join('');
-    }
-
-    async function addAdmin() {
-        await fetch(`${API}/add_admin`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:document.getElementById('newAdminEmail').value, password:document.getElementById('newAdminPass').value})});
-        loadAdmins();
-    }
-    
-    async function delAdmin(id) { if(confirm('Delete Admin?')) { await fetch(`${API}/delete_admin/${id}`, {method:'DELETE'}); loadAdmins(); } }
 </script>
 </body>
 </html>
